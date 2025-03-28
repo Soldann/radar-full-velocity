@@ -18,11 +18,12 @@ if raft_path not in sys.path:
     sys.path.insert(1, raft_path)
 from NeuFlow.neuflow import NeuFlow
 from NeuFlow.backbone_v7 import ConvBlock
+from data_utils import frame_utils
 
 DEVICE = 'cuda'
 
-image_width = 400 #768
-image_height = 192 #432
+image_width = 768
+image_height = 432
 
 def get_cuda_image(image_path):
     image = cv2.imread(image_path)
@@ -99,8 +100,6 @@ if __name__ == '__main__':
     model.eval()
     model.half()
 
-    model.init_bhwd(1, image_height, image_width, 'cuda')
-
     im_list = np.array(np.sort(glob.glob(join(out_dir, '*im_full.jpg'))))
     
     N = len(im_list)
@@ -127,19 +126,29 @@ if __name__ == '__main__':
         else:
             im2 = np.array(Image.open(f_im_prev)).astype(np.uint8)
                 
-        im1 = np.pad(im1, ((2,2),(0,0),(0,0)), 'constant')
-        im2 = np.pad(im2, ((2,2),(0,0),(0,0)), 'constant')
+        # im1 = np.pad(im1, ((2,2),(0,0),(0,0)), 'constant')
+        # im2 = np.pad(im2, ((2,2),(0,0),(0,0)), 'constant')
+        # im1 = cv2.resize(im1, (image_width, image_height))
+        # im2 = cv2.resize(im2, (image_width, image_height))
                         
-        im1 = torch.from_numpy(im1).permute(2, 0, 1).float()
-        im1 = im1[None,].to(DEVICE)   
+        im1 = torch.from_numpy(im1).permute(2, 0, 1).half()
+        im1 = im1[None].to(DEVICE)   
         
-        im2 = torch.from_numpy(im2).permute(2, 0, 1).float()
-        im2 = im2[None,].to(DEVICE)   
+        im2 = torch.from_numpy(im2).permute(2, 0, 1).half()
+        im2 = im2[None].to(DEVICE)   
+
+        # print(im1.shape)
+        padder = frame_utils.InputPadder(im1.shape, mode='kitti', padding_factor=16)
+        im1, im2 = padder.pad(im1, im2)
+        model.init_bhwd(im1.shape[0], im1.shape[-2], im1.shape[-1], device)
+        # print(im1.shape)
     
         with torch.no_grad():
-            flow_low, flow_up = model(im1, im2, iters=20, test_mode=True)
-            flow = flow_up[0].permute(1,2,0).cpu().numpy()[2:-2,...]
-            
+            flow = model(im1, im2)[-1][0]
+            flow = flow.permute(1,2,0).cpu().numpy()[6:-6,...]
+            # print(flow.shape)
+            # flow = cv2.resize(flow, (400, 192), interpolation=cv2.INTER_LINEAR)
+
             path_flow = f_im1[:-11] + 'full_flow.npy'        
             np.save(path_flow, flow)
         
