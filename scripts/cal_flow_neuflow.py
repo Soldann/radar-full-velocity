@@ -145,7 +145,7 @@ if __name__ == '__main__':
     
         with torch.no_grad():
             flow = model(im1, im2)[-1][0]
-            flow = flow.permute(1,2,0).cpu().numpy()[6:-6,...]
+            flow = flow.permute(1,2,0).cpu().numpy()[6:-6,...] # Remove 6 pixels of padding from each side, because the nuscenes dataset is padded vertically by 12 pixels total
             # print(flow.shape)
             # flow = cv2.resize(flow, (400, 192), interpolation=cv2.INTER_LINEAR)
 
